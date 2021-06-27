@@ -5,9 +5,10 @@ use std::env;
 use termion::color;
 use termion::event::Key;
 
-const STATUS_BG_COLOR: color::Rgb = color::Rgb(239, 239, 239);
+const STATUS_BG_COLOR: color::Rgb = color::Rgb(  0,   0,   0);
 const PAPER_BG_COLOR:  color::Rgb = color::Rgb( 20,  20,  20);
-pub const PAPER_WIDTH: usize = 80;
+const PAPER_WIDTH: usize = 80;
+const NUM_WIDTH: usize = 5;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Default)]
@@ -98,7 +99,7 @@ impl Editor {
         let Position { x, y } = self.cursor_position;
         let width  = self.terminal.size().width  as usize;
         // Subtract 1 for status line:
-        let height = self.terminal.size().height.saturating_sub(1) as usize;
+        let height = self.terminal.size().height as usize;
         let mut offset = &mut self.offset;
 
         if y < offset.y {
@@ -118,15 +119,16 @@ impl Editor {
         let terminal_height = self.terminal.size().height as usize;
         let Position { mut y, mut x } = self.cursor_position;
         let height = self.document.len().saturating_sub(1);
-        let mut width = if let Some(row) = self.document.row(y) {
-            row.len()
-        } else {
-            0
-        };
+        let mut width = self.document.row(y).map_or(0, Row::len);
+        //let mut width = if let Some(row) = self.document.row(y) {
+        //    row.len()
+        //} else {
+        //    0
+        //};
 
         match key {
-            Key::Up    => y = y.saturating_sub(1),
-            Key::Down  => if y < height { y = y.saturating_add(1) },
+            Key::Up   => y = y.saturating_sub(1),
+            Key::Down => if y < height { y = y.saturating_add(1) },
             Key::Left => {
                 if x > 0 {
                     x -= 1;
@@ -161,16 +163,17 @@ impl Editor {
                     height
                 }
             }
-            Key::Home     => x = 0,
-            Key::End      => x = width,
+            Key::Home => x = 0,
+            Key::End  => x = width,
             _ => (),
         }
 
-        width = if let Some(row) = self.document.row(y) {
-            row.len()
-        } else {
-            0
-        };
+        width = self.document.row(y).map_or(0, Row::len);
+        // width = if let Some(row) = self.document.row(y) {
+        //     row.len()
+        // } else {
+        //     0
+        // };
 
         if x > width { x = width; }
 
@@ -194,19 +197,24 @@ impl Editor {
         let end   = self.offset.x + width;
         let len   = row.len();
 
-        Terminal::set_bg_color(PAPER_BG_COLOR);
-        print!("{}", row.render(start, start.saturating_add(PAPER_WIDTH)));
-        if len < PAPER_WIDTH {
-            print!("{}", " ".repeat(PAPER_WIDTH - len));
+        if start < PAPER_WIDTH {
+            Terminal::set_bg_color(PAPER_BG_COLOR);
+            print!("{}", row.render(start, PAPER_WIDTH));
+            if start > len {
+                print!("{}", " ".repeat(PAPER_WIDTH.saturating_sub(start)));
+            } else {
+                print!("{}", " ".repeat(PAPER_WIDTH.saturating_sub(len)));
+            }
+            Terminal::reset_bg_color();
+            print!("{}\r\n", row.render(PAPER_WIDTH, end));
+        } else {
+            print!("{}\r\n", row.render(start, end));
         }
-
-        Terminal::reset_bg_color();
-        print!("{}\r\n", row.render(start.saturating_add(PAPER_WIDTH), end));
     }
 
     fn draw_rows(&self) {
         let height = self.terminal.size().height;
-        for terminal_row in 0..height - 1 {
+        for terminal_row in 0..height {
             Terminal::clear_current_line();
 
             if let Some(row) = self.document.row(terminal_row as usize
@@ -221,9 +229,9 @@ impl Editor {
     }
 
     fn draw_status_bar(&self) {
-        let spacer = " ".repeat(self.terminal.size().width as usize);
+        let spacer = "|".repeat(self.terminal.size().width as usize);
         Terminal::set_bg_color(STATUS_BG_COLOR);
-        print!("{}\r\n", spacer);
+        print!("{}", spacer);
         Terminal::reset_bg_color();
     }
 }
